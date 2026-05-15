@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestRedactErrorMessages(t *testing.T) {
+func TestRedactErrorDetails(t *testing.T) {
 	tests := []struct {
 		name         string
 		resp         string
@@ -19,6 +19,22 @@ func TestRedactErrorMessages(t *testing.T) {
 			expected:     `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"expected error message"}}`,
 			wantResp:     `{"jsonrpc":"2.0","id":1,"error":{"code":-32000}}`,
 			wantExpected: `{"jsonrpc":"2.0","id":1,"error":{"code":-32000}}`,
+			wantRedacted: true,
+		},
+		{
+			name:         "top-level error data is redacted from client response",
+			resp:         `{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Invalid params","data":"hex string without 0x prefix at line 1 column 3"}}`,
+			expected:     `{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Invalid params"}}`,
+			wantResp:     `{"jsonrpc":"2.0","id":1,"error":{"code":-32602}}`,
+			wantExpected: `{"jsonrpc":"2.0","id":1,"error":{"code":-32602}}`,
+			wantRedacted: true,
+		},
+		{
+			name:         "top-level error data is redacted from expected response",
+			resp:         `{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Invalid params"}}`,
+			expected:     `{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Invalid params","data":"spec detail"}}`,
+			wantResp:     `{"jsonrpc":"2.0","id":1,"error":{"code":-32602}}`,
+			wantExpected: `{"jsonrpc":"2.0","id":1,"error":{"code":-32602}}`,
 			wantRedacted: true,
 		},
 		{
@@ -81,7 +97,7 @@ func TestRedactErrorMessages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotResp, gotExpected, gotRedacted := redactErrorMessages(tt.resp, tt.expected)
+			gotResp, gotExpected, gotRedacted := redactErrorDetails(tt.resp, tt.expected)
 			if gotRedacted != tt.wantRedacted {
 				t.Errorf("redacted = %v, want %v", gotRedacted, tt.wantRedacted)
 			}

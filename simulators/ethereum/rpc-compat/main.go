@@ -119,11 +119,11 @@ func runTest(t *hivesim.T, c *hivesim.Client, test *rpcTest) error {
 				continue
 			}
 
-			// Patch JSON to remove error messages wherever both the client and expected
+			// Patch JSON to remove error details wherever both the client and expected
 			// response contain an error object. This handles both top-level JSON-RPC
 			// errors and nested errors (e.g. eth_simulateV1 calls[].error.message).
 			var errorRedacted bool
-			resp, expectedData, errorRedacted = redactErrorMessages(resp, expectedData)
+			resp, expectedData, errorRedacted = redactErrorDetails(resp, expectedData)
 
 			// Compare responses.
 			opts := &jsondiff.Options{
@@ -139,7 +139,7 @@ func runTest(t *hivesim.T, c *hivesim.Client, test *rpcTest) error {
 			// If there is a discrepancy, return error.
 			if diffStatus != jsondiff.FullMatch {
 				if errorRedacted {
-					t.Log("note: error messages removed from comparison")
+					t.Log("note: error details removed from comparison")
 				}
 				return fmt.Errorf("response differs from expected (-- client, ++ test):\n%s", diffText)
 			}
@@ -153,22 +153,23 @@ func runTest(t *hivesim.T, c *hivesim.Client, test *rpcTest) error {
 	return nil
 }
 
-// redactErrorMessages removes the "message" field from every "error" object
-// present in both the response and expected JSON. Client-specific wording is
-// thereby excluded from comparison while the shape and other fields of the
-// error are still checked. Returns the modified payloads and whether any
-// redaction occurred.
+// redactErrorDetails removes client-specific fields from every "error" object
+// present in both the response and expected JSON. Error "message" is removed
+// only when present on both sides. Error "data" is removed when present on
+// either side because clients often include implementation-specific details
+// there. The error shape and other fields are still checked. Returns the
+// modified payloads and whether any redaction occurred.
 //
 // Both top-level JSON-RPC errors and nested errors (e.g. eth_simulateV1
 // calls[].error.message) are handled. The walk does not descend into "error"
 // objects themselves, so errors nested inside another error's payload are not
 // touched.
-func redactErrorMessages(resp, expected string) (string, string, bool) {
-	paths := collectErrorMessagePaths(nil, "", gjson.Parse(resp), gjson.Parse(expected))
+func redactErrorDetails(resp, expected string) (string, string, bool) {
+	paths := collectErrorDetailPaths(nil, "", gjson.Parse(resp), gjson.Parse(expected))
 	if len(paths) == 0 {
 		return resp, expected, false
 	}
-	// Deleting "<path>.message" never changes object keys or array indices
+	// Deleting fields from error objects never changes object keys or array indices
 	// elsewhere, so the collected paths remain valid regardless of order.
 	for _, p := range paths {
 		resp, _ = sjson.Delete(resp, p)
@@ -177,10 +178,9 @@ func redactErrorMessages(resp, expected string) (string, string, bool) {
 	return resp, expected, true
 }
 
-// collectErrorMessagePaths walks the expected tree in parallel with the
-// response tree and appends the sjson path of every "error.message" field
-// present on both sides.
-func collectErrorMessagePaths(paths []string, path string, respVal, expectedVal gjson.Result) []string {
+// collectErrorDetailPaths walks the expected tree in parallel with the
+// response tree and appends the sjson path of every redacted error field.
+func collectErrorDetailPaths(paths []string, path string, respVal, expectedVal gjson.Result) []string {
 	switch {
 	case expectedVal.IsObject():
 		expectedVal.ForEach(func(key, val gjson.Result) bool {
@@ -194,10 +194,13 @@ func collectErrorMessagePaths(paths []string, path string, respVal, expectedVal 
 				if val.Get("message").Exists() && respChild.Get("message").Exists() {
 					paths = append(paths, childPath+".message")
 				}
+				if val.Get("data").Exists() || respChild.Get("data").Exists() {
+					paths = append(paths, childPath+".data")
+				}
 				// Do not descend into the error object itself.
 				return true
 			}
-			paths = collectErrorMessagePaths(paths, childPath, respChild, val)
+			paths = collectErrorDetailPaths(paths, childPath, respChild, val)
 			return true
 		})
 	case expectedVal.IsArray():
@@ -209,7 +212,7 @@ func collectErrorMessagePaths(paths []string, path string, respVal, expectedVal 
 			if !respChild.Exists() {
 				return true
 			}
-			paths = collectErrorMessagePaths(paths, joinPath(path, idx), respChild, val)
+			paths = collectErrorDetailPaths(paths, joinPath(path, idx), respChild, val)
 			return true
 		})
 	}
