@@ -79,12 +79,24 @@ def txpool_config:
   end
 ;
 
+def blocks_config:
+  if env.HIVE_TARGET_GAS_LIMIT != null then
+    {
+      "Blocks": {
+        "TargetBlockGasLimit": (env.HIVE_TARGET_GAS_LIMIT | tonumber)
+      }
+    }
+  else
+    {}
+  end
+;
+
 def base_config:
   {
     "Init": {
       "WebSocketsEnabled": true,
       "UseMemDb": true,
-      "ChainSpecPath": "/chainspec/test.json",
+      "ChainSpecPath": "/genesis.json",
       "BaseDbPath": "nethermind_db/hive",
       "LogFileName": "/hive.logs.txt"
     },
@@ -116,4 +128,4 @@ def base_config:
 ;
 
 # This is the main expression that outputs the config.
-base_config * keystore_config * merge_config * json_rpc_config * sync_config * txpool_config
+base_config * keystore_config * merge_config * json_rpc_config * sync_config * txpool_config * blocks_config
