@@ -10,7 +10,7 @@ ARG branch=""
 RUN apt-get update && apt-get install -y git
 
 # Clone repo and use the default branch if none specified
-RUN git clone --depth 1 https://github.com/ethereum/execution-specs.git && \
+RUN git clone --depth 1 https://github.com/Soubhik-10/execution-specs.git && \
     cd execution-specs && \
     if [ -n "$branch" ]; then \
         git fetch --depth 1 origin "$branch" && \
