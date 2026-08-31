@@ -1,17 +1,20 @@
 # Builds and runs the EELS (execution-specs) consume engine simulator
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-## Default fixtures/git-ref/repository
+## Default fixtures/git-ref
 ARG fixtures=stable@latest
 ENV FIXTURES=${fixtures}
 ARG branch=""
-ARG eels_repo=https://github.com/ethereum/execution-specs.git
 
 ## Clone and install EELS
 RUN apt-get update && apt-get install -y git isal
 
 # Clone repo and use the default branch if none specified
-RUN git clone --depth 1 "$eels_repo" && \
+RUN eels_repo=https://github.com/ethereum/execution-specs.git; \
+    if [ "$branch" = "devnets/frames/0" ]; then \
+        eels_repo=https://github.com/Soubhik-10/execution-specs.git; \
+    fi; \
+    git clone --depth 1 "$eels_repo" && \
     cd execution-specs && \
     if [ -n "$branch" ]; then \
         git fetch --depth 1 origin "$branch" && \
